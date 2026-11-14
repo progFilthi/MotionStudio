@@ -73,7 +73,9 @@ a single app target plus a test target by design.
 ## What the app does right now
 
 - Launches a resizable main window (minimum 1180×760, default 1400×880)
-  with a dark, restrained editing workspace.
+  with a restrained editing workspace that follows the system
+  appearance: cohesive light and dark palettes are defined once in
+  `WorkspaceTheme`.
 - Top toolbar: project title, transport and undo/redo controls (shown
   disabled — those features do not exist yet), and working panel toggles.
 - Left media browser, center preview canvas, bottom timeline, and right

@@ -39,7 +39,6 @@ struct WorkspaceView: View {
         }
         .frame(minWidth: 1180, minHeight: 760)
         .background(WorkspaceTheme.windowBackground)
-        .preferredColorScheme(.dark)
         .alert(
             bindableEnvironment.presentedError?.title ?? "Something went wrong",
             isPresented: $bindableEnvironment.isPresentingError,

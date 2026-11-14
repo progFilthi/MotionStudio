@@ -189,6 +189,11 @@ root so the synchronized Xcode groups stay clean of documents.
 Transport, undo/redo, import, and export are absent or shown disabled;
 no control pretends to work.
 
+**Follow-up (2026-11-14):** all workspace chrome colors are now defined
+as explicit light/dark pairs in `WorkspaceTheme` and the app follows the
+system appearance instead of forcing dark, so both modes stay cohesive
+as the design system grows.
+
 **Known limitations after Milestone 0:**
 
 -   Panel divider positions are not persisted; only per-panel visibility
