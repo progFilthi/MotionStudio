@@ -40,7 +40,7 @@ struct PreviewCanvasView: View {
             WorkspacePlaceholder(
                 systemImage: "photo",
                 title: "Preview",
-                message: "Import a video from the media browser to preview it here."
+                message: "Select media in the browser, or click a timeline clip, to preview it here."
             )
         }
     }

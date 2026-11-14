@@ -5,8 +5,8 @@
 > **Product:** Native macOS motion-graphics editor with a future
 > AI-native editing layer.
 >
-> **Current implementation phase:** Milestone 0 --- native application
-> foundation.
+> **Current implementation phase:** Milestone 2 --- project model,
+> timeline foundation, and saving.
 >
 > **Important:** This document describes the intended architecture. It
 > does not mean all described systems should be implemented immediately.
@@ -496,6 +496,15 @@ lifecycle. Prefer the option that gives adequate control over package
 reading/writing, autosave, recovery, and file coordination.
 
 Do not create a custom document framework without a demonstrated need.
+
+Decision (Milestone 2): SwiftUI DocumentGroup with a `FileDocument`
+wrapper is the current implementation. The macOS 27 SDK soft-deprecates
+`FileDocument` in favor of the `Document` protocol, which requires
+macOS 27; the deployment target is macOS 14, so `FileDocument` is
+warning-free there and remains fully functional. Migrate to the new
+protocol when the deployment target moves past macOS 14; the wrapper
+already isolates the read/write logic in `ProjectManifestCodec`, so the
+migration touches one file.
 
 ### 6.5 SQLite
 

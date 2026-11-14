@@ -41,6 +41,14 @@ final class PlaybackController {
     /// wires this to error reporting.
     var onError: (@MainActor (Error) -> Void)?
 
+    /// Called on the main actor whenever the playback position changes
+    /// (periodic observation and explicit seeks). The composition root
+    /// maps this into composition time for the timeline playhead.
+    var onTimeChanged: (@MainActor (CMTime) -> Void)?
+
+    /// Applied when the next loaded item becomes ready to play.
+    private var pendingStartTime: CMTime?
+
     private var timeObserverToken: Any?
     private var itemStatusObservation: NSKeyValueObservation?
     private var playerStatusObservation: NSKeyValueObservation?
@@ -70,7 +78,7 @@ final class PlaybackController {
 
     // MARK: Loading
 
-    func load(url: URL) {
+    func load(url: URL, startAt: CMTime? = nil) {
         unload()
         AppLog.media.info("Loading media for playback: \(url.lastPathComponent, privacy: .public)")
 
@@ -80,6 +88,7 @@ final class PlaybackController {
         isReadyToPlay = false
         duration = .zero
         currentTime = .zero
+        pendingStartTime = startAt
         player.replaceCurrentItem(with: item)
 
         itemStatusObservation = item.observe(\.status, options: [.initial]) { [weak self] item, _ in
@@ -102,6 +111,7 @@ final class PlaybackController {
         isPlaying = false
         duration = .zero
         currentTime = .zero
+        pendingStartTime = nil
     }
 
     private func handleItemStatus(_ item: AVPlayerItem) {
@@ -109,6 +119,12 @@ final class PlaybackController {
         case .readyToPlay:
             isReadyToPlay = true
             duration = item.duration
+            if let start = pendingStartTime {
+                pendingStartTime = nil
+                currentTime = start
+                player.seek(to: start, toleranceBefore: .zero, toleranceAfter: .zero)
+                onTimeChanged?(start)
+            }
             AppLog.media.info("Playback ready: duration \(item.duration.seconds, format: .fixed(precision: 2))s")
         case .failed:
             isReadyToPlay = false
@@ -149,6 +165,7 @@ final class PlaybackController {
         guard isReadyToPlay else { return }
         currentTime = time
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        onTimeChanged?(time)
     }
 
     /// Fast seek while the user drags the scrubber; precise seek happens on
@@ -185,6 +202,7 @@ final class PlaybackController {
             MainActor.assumeIsolated {
                 guard let self, self.hasItem else { return }
                 self.currentTime = time
+                self.onTimeChanged?(time)
             }
         }
     }

@@ -2,22 +2,24 @@ import SwiftUI
 
 @main
 struct MotionStudioApp: App {
-    @State private var environment = AppEnvironment()
+    /// The environment of the focused document window; commands must
+    /// resolve per-window because each window owns its environment.
+    @FocusedValue(\.appEnvironment) private var environment: AppEnvironment?
 
     var body: some Scene {
-        WindowGroup {
-            WorkspaceView()
-                .environment(environment)
+        DocumentGroup(newDocument: ProjectDocument()) { file in
+            WorkspaceView(project: file.$document.project)
         }
-        .defaultSize(width: 1400, height: 880)
         .windowResizability(.contentMinSize)
         .commands {
             CommandGroup(after: .newItem) {
                 Button("Import Media…") {
-                    Task { await environment.importMedia() }
+                    if let environment {
+                        Task { await environment.importMedia() }
+                    }
                 }
                 .keyboardShortcut("i", modifiers: .command)
-                .disabled(environment.mediaLibrary.isImporting)
+                .disabled(environment == nil)
             }
         }
     }

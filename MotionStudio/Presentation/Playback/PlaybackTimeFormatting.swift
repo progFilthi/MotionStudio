@@ -23,4 +23,19 @@ nonisolated enum PlaybackTimeFormatting {
     static func format(_ time: CMTime) -> String {
         format(seconds: time.seconds)
     }
+
+    /// Formats seconds as `M:SS` (or `H:MM:SS`) for ruler labels, where
+    /// whole-second resolution is enough.
+    static func shortFormat(seconds: Double) -> String {
+        let clamped = seconds.isFinite ? max(0, seconds) : 0
+        let total = Int(clamped.rounded(.down))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let secondsPart = total % 60
+
+        if hours > 0 {
+            return String(format: "%d:%02d:%02d", hours, minutes, secondsPart)
+        }
+        return String(format: "%d:%02d", minutes, secondsPart)
+    }
 }

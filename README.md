@@ -5,10 +5,11 @@ Projects, media, preview, and export are local-first; editing must work
 fully without AI. See `roadmap.md` for the delivery plan and
 `architecture.md` for the technical architecture.
 
-**Current status:** Milestone 0 — native application foundation — is
-complete. The app builds and launches with a stable workspace shell.
-Media import, timeline editing, animation, saving, and AI are not
-implemented yet.
+**Current status:** Milestone 2 — project model, timeline foundation,
+and saving — is complete. The app builds and launches with a stable
+workspace shell, imports MOV/MP4/M4V media with playback, and saves and
+reopens `.motionproject` packages with a timeline foundation. Animation,
+effects, and AI are not implemented yet.
 
 ## Requirements
 
@@ -58,18 +59,21 @@ The app lands in `.build/Build/Products/Debug/MotionStudio.app`.
 ```
 MotionStudio.xcodeproj/
 MotionStudio/                     App target sources
-├── App/                          Entry point, composition root, diagnostics
+├── App/                          Entry point, composition root, document glue
+├── Domain/                       Pure domain models (no UI/media frameworks)
 ├── MediaEngine/                  Import, metadata, playback (AVFoundation only)
-├── Presentation/                 Workspace, toolbar, panels
+├── Persistence/                  Project package format and codec
+├── Presentation/                 Workspace, toolbar, timeline, panels
 └── Resources/                    Asset catalog
+Support/Info.plist                App Info.plist incl. document type registration
 Tests/MotionStudioTests/          Unit tests (hosted in the app)
 roadmap.md                        Milestone plan and status
 architecture.md                   Technical architecture
 ```
 
 Swift packages (`Packages/Domain`, `Packages/MotionEngine`, …) are
-introduced by later milestones as real code requires them; Milestone 0 is
-a single app target plus a test target by design.
+introduced by later milestones as real code requires them; folders are
+the current module boundary.
 
 ## What the app does right now
 
@@ -84,9 +88,20 @@ a single app target plus a test target by design.
   sizes.
 - **Media import and playback (Milestone 1):** import MOV/MP4/M4V videos
   via File > Import Media… (⌘I) or the sidebar + button; inspected
-  duration, dimensions, and track counts appear in the media list;
-  selecting media loads it into the preview through AVPlayer, with
-  working transport, scrubber, and time readout in the toolbar.
+  duration, dimensions, frame rate, and track counts appear in the media
+  list; selecting media loads it into the preview through AVPlayer, with
+  working transport, scrubber, and time readout in the toolbar. Space
+  toggles play/pause.
+- **Projects and timeline (Milestone 2):** the app is document-based —
+  File > New, Open…, Save (⌘S), Duplicate, Rename, and Open Recent work
+  through the native document system. Projects are `.motionproject`
+  packages (a directory with a versioned `manifest.json`). Imported
+  media registers as project assets referenced by stable UUID; the
+  sidebar + button (or selecting media, then the timeline button) places
+  a clip on the timeline. The timeline shows a ruler, playhead, track
+  rows, and clip blocks; click or drag the ruler to scrub the preview to
+  the corresponding time. Missing media files are reported clearly and
+  clips are preserved.
 - Panels resize via the split views and collapse via the toolbar toggles;
   panel visibility persists across launches.
 - Errors are reported through a structured path: technical detail goes to
@@ -98,6 +113,18 @@ Logs use the unified logging system with subsystem
 `com.motionstudio.MotionStudio` and categories `app`, `workspace`, and
 `media`. Filter in Console.app by that subsystem. Do not log secrets,
 API keys, or private media contents.
+
+## Project files
+
+Projects are `.motionproject` **document packages** — directories with
+an authoritative, versioned `manifest.json` (`MotionStudio/Persistence/`
+owns the format). The manifest is pretty-printed JSON with sorted keys
+and ISO-8601 dates so files stay reviewable and byte-stable; assets are
+referenced by stable UUID, and future schema versions are rejected
+safely while migrations run through an explicit, tested step registry.
+Media is currently linked to its original location; copy-into-package
+is a later milestone, but the format already distinguishes both
+policies.
 
 ## Supported media formats
 

@@ -78,6 +78,7 @@ nonisolated struct MediaImporter: Sendable {
 
             var naturalSize = CGSize.zero
             var videoCodec: String?
+            var frameRate: Float?
             if let videoTrack = videoTracks.first {
                 let size = try await videoTrack.load(.naturalSize)
                 let transform = try await videoTrack.load(.preferredTransform)
@@ -88,6 +89,8 @@ nonisolated struct MediaImporter: Sendable {
                    let first = descriptions.first {
                     videoCodec = MediaImporter.fourCCString(CMFormatDescriptionGetMediaSubType(first))
                 }
+
+                frameRate = try? await videoTrack.load(.nominalFrameRate)
             }
 
             return ImportedMediaInfo(
@@ -96,6 +99,7 @@ nonisolated struct MediaImporter: Sendable {
                 naturalSize: naturalSize,
                 videoTrackCount: videoTracks.count,
                 audioTrackCount: audioTracks.count,
+                frameRate: frameRate,
                 videoCodec: videoCodec
             )
         } catch let error as MediaImportError {

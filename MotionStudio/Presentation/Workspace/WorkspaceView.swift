@@ -3,11 +3,18 @@ import SwiftUI
 
 /// The main editing workspace.
 ///
-/// Regions (architecture §12): toolbar, left media sidebar, center preview,
-/// bottom timeline, right inspector. Panels resize through the split views
-/// and collapse through toolbar toggles; choices persist across launches.
-/// The space key toggles play/pause via a guarded local event monitor.
+/// Regions (architecture §12): toolbar, left media sidebar, center
+/// preview, bottom timeline, right inspector. Panels resize through the
+/// split views and collapse through toolbar toggles; choices persist
+/// across launches. The space key toggles play/pause via a guarded
+/// local event monitor.
+///
+/// The project arrives as a binding from the document system: edits
+/// applied through it mark the document dirty and autosave. Session
+/// state (selection, playhead) lives in the environment and is never
+/// part of project data.
 struct WorkspaceView: View {
+    @Binding var project: Project
     @Environment(AppEnvironment.self) private var environment
 
     @State private var layout = WorkspaceLayoutState()
@@ -17,11 +24,11 @@ struct WorkspaceView: View {
         @Bindable var bindableEnvironment = environment
 
         VStack(spacing: 0) {
-            WorkspaceToolbar(layout: layout)
+            WorkspaceToolbar(layout: layout, projectName: project.name)
 
             HSplitView {
                 if layout.isMediaBrowserVisible {
-                    MediaSidebarView()
+                    MediaSidebarView(project: $project)
                 }
 
                 VSplitView {
@@ -29,7 +36,7 @@ struct WorkspaceView: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     if layout.isTimelineVisible {
-                        TimelinePanelView()
+                        TimelinePanelView(project: $project)
                     }
                 }
                 .frame(minWidth: 560)
@@ -51,16 +58,17 @@ struct WorkspaceView: View {
         } message: { presentation in
             Text(presentation.message)
         }
-        .onChange(of: environment.mediaLibrary.selectedItemID) { _, newID in
-            guard let newID,
-                  let item = environment.mediaLibrary.item(withID: newID) else { return }
-            environment.selectMedia(item)
-        }
+        .focusedSceneValue(\.appEnvironment, environment)
         .onAppear {
+            environment.attach(project: $project)
+            environment.loadDocument(project)
             installPlaybackKeyMonitor()
         }
         .onDisappear {
             removePlaybackKeyMonitor()
+        }
+        .onChange(of: project.id) { _, _ in
+            environment.loadDocument(project)
         }
     }
 

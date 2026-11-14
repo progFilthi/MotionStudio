@@ -13,6 +13,9 @@ nonisolated struct ImportedMediaInfo: Equatable, Sendable {
     let videoTrackCount: Int
     let audioTrackCount: Int
 
+    /// Approximate frames per second of the first video track, if any.
+    let frameRate: Float?
+
     /// Four-character codec code of the first video track, if any.
     let videoCodec: String?
 }

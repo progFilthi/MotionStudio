@@ -8,13 +8,14 @@ import SwiftUI
 /// fully functional.
 struct WorkspaceToolbar: View {
     let layout: WorkspaceLayoutState
+    let projectName: String
     @Environment(AppEnvironment.self) private var environment
 
     var body: some View {
         HStack(spacing: 16) {
-            // Project identity. Editing a project is not implemented yet,
-            // so this is a plain label rather than a fake control.
-            Text("Untitled Project")
+            // Project identity comes from the document; renaming happens
+            // through the native window title (DocumentGroup).
+            Text(projectName)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(WorkspaceTheme.textPrimary)
                 .lineLimit(1)

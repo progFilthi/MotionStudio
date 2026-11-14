@@ -270,35 +270,83 @@ distribution. Space toggles play/pause through a guarded key monitor
 
 **Scope**
 
--   [ ] Implement versioned domain models for Project, Composition,
+-   [x] Implement versioned domain models for Project, Composition,
     Track, Clip, MediaAsset, and media time.
--   [ ] Use stable UUID identifiers for persistent entities.
--   [ ] Represent timeline time with rational values (value/timescale);
+-   [x] Use stable UUID identifiers for persistent entities.
+-   [x] Represent timeline time with rational values (value/timescale);
     convert to CMTime at AVFoundation boundaries.
--   [ ] Define explicit, stable Codable serialization for enums with
+-   [x] Define explicit, stable Codable serialization for enums with
     associated values.
--   [ ] Create a `.motionproject` document package format.
--   [ ] Store the authoritative project manifest as versioned JSON.
--   [ ] Define how imported assets are referenced.
--   [ ] Offer a clear distinction between linking to original media and
+-   [x] Create a `.motionproject` document package format.
+-   [x] Store the authoritative project manifest as versioned JSON.
+-   [x] Define how imported assets are referenced.
+-   [x] Offer a clear distinction between linking to original media and
     copying media into a project, if both are implemented.
--   [ ] Implement a basic timeline ruler, playhead, track rows, and clip
+-   [x] Implement a basic timeline ruler, playhead, track rows, and clip
     blocks.
--   [ ] Place an imported video clip on a track.
--   [ ] Connect timeline seeking to preview playback.
--   [ ] Implement save, reopen, and basic missing-media handling.
--   [ ] Add project format migration/version validation foundations.
+-   [x] Place an imported video clip on a track.
+-   [x] Connect timeline seeking to preview playback.
+-   [x] Implement save, reopen, and basic missing-media handling.
+-   [x] Add project format migration/version validation foundations.
 
 **Acceptance criteria**
 
--   A user can create a project and add an imported video as a timeline
-    clip.
--   The timeline shows the clip at the correct start and duration.
--   Moving the playhead seeks the preview to the corresponding time.
--   Saving and reopening restores the project and its timeline.
--   Project data does not depend on transient SwiftUI view state.
--   A missing source file is reported clearly rather than silently
+-   [x] A user can create a project and add an imported video as a
+    timeline clip.
+-   [x] The timeline shows the clip at the correct start and duration.
+-   [x] Moving the playhead seeks the preview to the corresponding time.
+-   [x] Saving and reopening restores the project and its timeline.
+-   [x] Project data does not depend on transient SwiftUI view state.
+-   [x] A missing source file is reported clearly rather than silently
     discarded.
+
+**Status:** Completed 2026-11-14. The domain layer (`MotionStudio/
+Domain/`) holds pure Foundation-only models: `MediaTime` with explicit
+rounding policies and validated timescales, `FrameRate` preserving
+fractional rates (30000/1001), `RGBAColor`, `Transform` (normalized
+coordinates, Y-up, origin bottom-left, center at (0.5, 0.5)), `Track`,
+`Clip` with a tagged `ClipSource` (`kind` discriminator + payload
+version), `MediaAsset` with linked/copied reference policy,
+`Composition`, and `Project` with edit helpers; CMTime conversion lives
+at the AVFoundation boundary (`MediaEngine/MediaTimeConversion.swift`).
+Persistence (`MotionStudio/Persistence/`) owns the `.motionproject`
+package: a versioned `manifest.json` with a stable format identifier,
+pretty-printed sorted-keys JSON, ISO-8601 dates, rejection of foreign
+and future-version files, and an ordered migration-step registry (empty
+while version 1 is current). The document lifecycle uses SwiftUI
+DocumentGroup with a `FileDocument` wrapper (`App/ProjectDocument.swift`)
+that reads/writes the package wrapper and preserves the `assets/`
+folder; document types are registered in a hand-written
+`Support/Info.plist`. The timeline panel renders ruler, playhead, track
+rows, and clip blocks with zoom and click/drag scrubbing wired to
+preview seeking through the pure `TimelineMapper`. Linked import is
+implemented; copy-into-package is deferred to media management, but
+both policies exist in the format and copied-path resolution works.
+Missing media keeps clips and reports a clear alert listing the files.
+
+**Known limitations after Milestone 2:**
+
+-   Playback is the single-clip workflow: the preview plays the
+    selected clip; continuous multi-clip playback arrives with the
+    composition/playback adapter (architecture §7.3).
+-   Clip placement appends sequentially after the last clip on the
+    target track; trimming, moving, and deleting clips are later
+    milestones (editing/commands).
+-   One track per kind is created on demand (`Composition.track(forKind:)`
+    reuses); multi-video-track creation UI is not built, though the
+    insert-at-top convention is defined.
+-   The media browser deduplicates by absolute path; moving a file and
+    re-importing creates a second asset. Relinking and file-move
+    detection are later work.
+-   Renaming through the native window title does not update the
+    project name stored in the manifest yet.
+-   Audio-only assets still preview as a blank canvas with live audio
+    and working transport.
+-   `FileDocument` is soft-deprecated in the macOS 27 SDK in favor of
+    the `Document` protocol (macOS 27+); migrate when the deployment
+    target moves past macOS 14.
+-   Toolbar time readout shows source time of the loaded asset while
+    the timeline shows composition time.
 
 ## 7. Milestone 3 --- Motion graphics and animation foundation
 
