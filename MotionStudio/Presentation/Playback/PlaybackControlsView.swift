@@ -41,7 +41,7 @@ struct PlaybackControlsView: View {
                 Image(systemName: playback.isPlaying ? "pause.fill" : "play.fill")
             }
             .foregroundStyle(isControlEnabled ? WorkspaceTheme.textPrimary : WorkspaceTheme.textTertiary)
-            .help(playback.isPlaying ? "Pause" : "Play")
+            .help(playback.isPlaying ? "Pause (Space)" : "Play (Space)")
             .disabled(!isControlEnabled)
             .accessibilityLabel(playback.isPlaying ? "Pause" : "Play")
 

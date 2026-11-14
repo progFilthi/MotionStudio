@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// The main editing workspace.
@@ -5,10 +6,12 @@ import SwiftUI
 /// Regions (architecture §12): toolbar, left media sidebar, center preview,
 /// bottom timeline, right inspector. Panels resize through the split views
 /// and collapse through toolbar toggles; choices persist across launches.
+/// The space key toggles play/pause via a guarded local event monitor.
 struct WorkspaceView: View {
     @Environment(AppEnvironment.self) private var environment
 
     @State private var layout = WorkspaceLayoutState()
+    @State private var keyMonitor: Any?
 
     var body: some View {
         @Bindable var bindableEnvironment = environment
@@ -53,5 +56,49 @@ struct WorkspaceView: View {
                   let item = environment.mediaLibrary.item(withID: newID) else { return }
             environment.selectMedia(item)
         }
+        .onAppear {
+            installPlaybackKeyMonitor()
+        }
+        .onDisappear {
+            removePlaybackKeyMonitor()
+        }
+    }
+
+    // MARK: Space key play/pause
+
+    private func installPlaybackKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        let environment = environment
+
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            // Local event monitors are invoked on the main thread. Extract
+            // plain values on the monitor thread, then hop for the decision.
+            let keyCode = event.keyCode
+            let modifiers = event.modifierFlags
+            let isEditingText = event.window?.firstResponder is NSTextView
+            let isModalSessionActive = NSApp.modalWindow != nil
+
+            let consumed = MainActor.assumeIsolated {
+                let router = PlaybackKeyRouter(
+                    shouldHandle: { environment.playback.isReadyToPlay },
+                    toggle: { environment.playback.togglePlayPause() }
+                )
+                return router.handle(
+                    keyCode: keyCode,
+                    modifiers: modifiers,
+                    isEditingText: isEditingText,
+                    isModalSessionActive: isModalSessionActive
+                )
+            }
+
+            return consumed ? nil : event
+        }
+    }
+
+    private func removePlaybackKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+        }
+        keyMonitor = nil
     }
 }

@@ -245,7 +245,8 @@ loads; playback state is narrow and UI-scoped (architecture §10.2).
 Errors surface through the Milestone 0 reporting path as alerts and
 unified-log diagnostics. Security-scoped access is not needed yet: the
 app is not sandboxed during local development; revisit before
-distribution.
+distribution. Space toggles play/pause through a guarded key monitor
+(inactive during text editing and modal sessions).
 
 **Known limitations after Milestone 1:**
 
