@@ -143,6 +143,94 @@ nonisolated struct Project: Codable, Hashable, Sendable {
         return nil
     }
 
+    /// Applies an edit to the clip with a given identifier.
+    ///
+    /// - Returns: the updated clip, or `nil` when no such clip exists.
+    @discardableResult
+    mutating func updateClip(withID id: UUID, perform: (inout Clip) -> Void) -> Clip? {
+        for trackIndex in composition.tracks.indices {
+            if let clipIndex = composition.tracks[trackIndex].clips.firstIndex(where: { $0.id == id }) {
+                perform(&composition.tracks[trackIndex].clips[clipIndex])
+                return composition.tracks[trackIndex].clips[clipIndex]
+            }
+        }
+        return nil
+    }
+
+    /// Removes the clip with a given identifier from the timeline.
+    ///
+    /// Tracks are structural and stay even when empty. The composition
+    /// duration never shrinks below its current value, so removing a
+    /// clip cannot invalidate the canvas length other content relies on.
+    ///
+    /// - Returns: the removed clip, or `nil` when no such clip exists.
+    @discardableResult
+    mutating func removeClip(withID id: UUID) -> Clip? {
+        for trackIndex in composition.tracks.indices {
+            if let clipIndex = composition.tracks[trackIndex].clips.firstIndex(where: { $0.id == id }) {
+                return composition.tracks[trackIndex].clips.remove(at: clipIndex)
+            }
+        }
+        return nil
+    }
+
+    /// Places a new typed text clip on the dedicated text track.
+    ///
+    /// The clip is five seconds long and starts at the requested
+    /// composition time. When that time falls inside an existing clip
+    /// on the text track, the new clip appends after the last clip on
+    /// the track instead, keeping the no-overlap invariant. The
+    /// composition duration grows when the clip extends past it.
+    ///
+    /// - Parameter time: requested start time in composition time.
+    /// - Returns: the created clip.
+    @discardableResult
+    mutating func addTextClip(at time: MediaTime) -> Clip {
+        let track = textTrack()
+
+        var start = time < .zero ? .zero : time
+        if let last = track.clips.last, start < last.timelineRange.end {
+            start = last.timelineRange.end
+        }
+
+        let duration = MediaTime.exact(3000, over: Composition.timescale)
+        let clip = Clip(
+            name: "Text",
+            source: .text(TextSource(text: "Text")),
+            timelineStart: start,
+            timelineDuration: duration,
+            sourceIn: .zero,
+            sourceOut: duration
+        )
+
+        if let trackIndex = composition.tracks.firstIndex(where: { $0.id == track.id }) {
+            composition.tracks[trackIndex].clips.append(clip)
+        }
+        let clipEnd = start + duration
+        if clipEnd > composition.duration {
+            composition.duration = clipEnd
+        }
+        return clip
+    }
+
+    /// The dedicated track for text clips, creating one when absent.
+    ///
+    /// Text layers live on video-kind tracks named "Text N" whose clips
+    /// are all text. Reusing a text track keeps per-track clips
+    /// non-overlapping; a new text track inserts at index 0 (topmost)
+    /// so text draws above video content in the render order.
+    mutating func textTrack() -> Track {
+        if let existing = composition.tracks.first(where: { track in
+            track.kind == .video && track.name.hasPrefix("Text ") && track.clips.allSatisfy(\.isText)
+        }) {
+            return existing
+        }
+        let count = composition.tracks.filter { $0.kind == .video && $0.name.hasPrefix("Text ") }.count
+        let track = Track(name: "Text \(count + 1)", kind: .video)
+        composition.tracks.insert(track, at: 0)
+        return track
+    }
+
     private var videoTrackCount: Int {
         composition.tracks.filter { $0.kind == .video }.count
     }

@@ -21,13 +21,29 @@ struct TimelinePanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             WorkspacePanelHeader(title: "Timeline") {
-                zoomControls
+                HStack(spacing: 10) {
+                    addTextButton
+                    zoomControls
+                }
             }
 
             timelineContent
         }
         .frame(minHeight: 200)
         .background(WorkspaceTheme.panelBackground)
+    }
+
+    /// Places a typed text clip at the playhead (roadmap Milestone 3).
+    private var addTextButton: some View {
+        Button {
+            environment.addTextClip()
+        } label: {
+            Label("Text", systemImage: "textformat")
+                .font(.system(size: 11, weight: .medium))
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(WorkspaceTheme.textSecondary)
+        .help("Add a text layer at the playhead (⌘T)")
     }
 
     // MARK: Layout
@@ -133,7 +149,10 @@ struct TimelinePanelView: View {
                 ClipBlockView(
                     clip: clip,
                     isSelected: clip.id == environment.selectedClipID,
-                    isDimmed: !track.isVisible
+                    isDimmed: !track.isVisible,
+                    playheadTime: environment.playheadTime,
+                    frameTolerance: project.composition.frameRate.halfFrameDuration,
+                    pixelsPerSecond: pixelsPerSecond
                 )
                 .frame(width: max(clip.timelineDuration.seconds * pixelsPerSecond, 24))
                 .offset(x: clip.timelineStart.seconds * pixelsPerSecond)
@@ -235,17 +254,51 @@ private nonisolated struct TriangleHead: Shape {
 }
 
 /// One clip block on a track lane.
+///
+/// Shows the clip name and duration; keyframed clips draw one diamond
+/// per distinct keyframe time along the bottom edge (roadmap Milestone
+/// 3). The diamond under the playhead highlights so scrubbing makes
+/// keyframe hits visible.
 private struct ClipBlockView: View {
     let clip: Clip
     let isSelected: Bool
     let isDimmed: Bool
+    let playheadTime: MediaTime
+    let frameTolerance: MediaTime
+    let pixelsPerSecond: Double
+
+    private let isTextLayer: Bool
+
+    init(
+        clip: Clip,
+        isSelected: Bool,
+        isDimmed: Bool,
+        playheadTime: MediaTime,
+        frameTolerance: MediaTime,
+        pixelsPerSecond: Double
+    ) {
+        self.clip = clip
+        self.isSelected = isSelected
+        self.isDimmed = isDimmed
+        self.playheadTime = playheadTime
+        self.frameTolerance = frameTolerance
+        self.pixelsPerSecond = pixelsPerSecond
+        self.isTextLayer = clip.isText
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            Text(clip.name)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(WorkspaceTheme.textPrimary)
-                .lineLimit(1)
+            HStack(spacing: 3) {
+                if isTextLayer {
+                    Image(systemName: "textformat")
+                        .font(.system(size: 8))
+                        .foregroundStyle(WorkspaceTheme.textPrimary)
+                }
+                Text(clip.name)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(WorkspaceTheme.textPrimary)
+                    .lineLimit(1)
+            }
             Text(PlaybackTimeFormatting.shortFormat(seconds: clip.timelineDuration.seconds))
                 .font(.system(size: 8, design: .monospaced))
                 .foregroundStyle(WorkspaceTheme.textTertiary)
@@ -253,7 +306,8 @@ private struct ClipBlockView: View {
         }
         .padding(.horizontal, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(WorkspaceTheme.accent.opacity(isSelected ? 0.45 : 0.25))
+        .background(blockFill)
+        .overlay(keyframeDiamonds)
         .overlay(
             RoundedRectangle(cornerRadius: 4)
                 .strokeBorder(
@@ -264,6 +318,79 @@ private struct ClipBlockView: View {
         .clipShape(RoundedRectangle(cornerRadius: 4))
         .opacity(isDimmed ? 0.4 : 1)
         .contentShape(Rectangle())
-        .help("\(clip.name) — click to select")
+        .help(helpText)
+    }
+
+    private var blockFill: Color {
+        if isTextLayer {
+            return WorkspaceTheme.textSecondary.opacity(isSelected ? 0.4 : 0.22)
+        }
+        return WorkspaceTheme.accent.opacity(isSelected ? 0.45 : 0.25)
+    }
+
+    private var helpText: String {
+        if isTextLayer {
+            return "\(clip.name) — text layer, click to select"
+        }
+        return "\(clip.name) — click to select"
+    }
+
+    // MARK: Keyframe diamonds
+
+    /// Distinct keyframe times across all animations of the clip,
+    /// sorted by clip-local time.
+    private var keyframeTimes: [MediaTime] {
+        var seen = Set<MediaTime>()
+        var times: [MediaTime] = []
+        for animation in clip.animations {
+            for keyframe in animation.keyframes where !seen.contains(keyframe.time) {
+                seen.insert(keyframe.time)
+                times.append(keyframe.time)
+            }
+        }
+        return times.sorted()
+    }
+
+    /// The keyframe (if any) falling under the playhead within the
+    /// half-frame tolerance, across all animations.
+    private var keyframeAtPlayhead: Keyframe? {
+        let localTime = playheadTime - clip.timelineStart
+        return clip.animations.lazy
+            .compactMap { $0.keyframe(near: localTime, tolerance: frameTolerance) }
+            .first
+    }
+
+    @ViewBuilder
+    private var keyframeDiamonds: some View {
+        let marked = keyframeAtPlayhead?.time
+        GeometryReader { geometry in
+            ForEach(Array(keyframeTimes.enumerated()), id: \.offset) { _, time in
+                KeyframeDiamond(isAtPlayhead: time == marked)
+                    .fill(time == marked ? WorkspaceTheme.accent : WorkspaceTheme.textPrimary.opacity(0.9))
+                    .frame(width: 7, height: 7)
+                    .position(
+                        x: time.seconds * pixelsPerSecond,
+                        y: geometry.size.height - 6
+                    )
+            }
+        }
+        .allowsHitTesting(false)
+    }
+}
+
+/// Small diamond marking a keyframe position on a clip block.
+private nonisolated struct KeyframeDiamond: Shape {
+    let isAtPlayhead: Bool
+
+    func path(in rect: CGRect) -> Path {
+        let size = isAtPlayhead ? 4.2 : 3.4
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        var path = Path()
+        path.move(to: CGPoint(x: center.x, y: center.y - size))
+        path.addLine(to: CGPoint(x: center.x + size, y: center.y))
+        path.addLine(to: CGPoint(x: center.x, y: center.y + size))
+        path.addLine(to: CGPoint(x: center.x - size, y: center.y))
+        path.closeSubpath()
+        return path
     }
 }

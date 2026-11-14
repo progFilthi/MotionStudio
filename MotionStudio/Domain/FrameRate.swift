@@ -49,6 +49,15 @@ nonisolated struct FrameRate: Codable, Hashable, Sendable {
         .exact(Int64(denominator), over: numerator)
     }
 
+    /// Exactly half of one frame's duration.
+    ///
+    /// Computed as a fresh rational (denominator over twice the
+    /// numerator) because scaling the frame duration by 0.5 truncates
+    /// to zero for odd numerators.
+    var halfFrameDuration: MediaTime {
+        .exact(Int64(denominator), over: numerator * 2)
+    }
+
     /// Frames per second as a Double, for display and comparisons only.
     var framesPerSecond: Double {
         Double(numerator) / Double(denominator)

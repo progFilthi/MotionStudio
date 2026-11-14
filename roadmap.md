@@ -354,34 +354,95 @@ Missing media keeps clips and reports a clear alert listing the files.
 
 **Scope**
 
--   [ ] Add a typed text-layer model.
--   [ ] Add text creation, editing, selection, and deletion.
--   [ ] Add typography controls for text, font, size, weight, color,
+-   [x] Add a typed text-layer model.
+-   [x] Add text creation, editing, selection, and deletion.
+-   [x] Add typography controls for text, font, size, weight, color,
     alignment, and tracking where supported.
--   [ ] Add a transform model for position, scale, rotation, anchor, and
+-   [x] Add a transform model for position, scale, rotation, anchor, and
     opacity.
--   [ ] Define a reusable animatable-property model.
--   [ ] Implement keyframes with rational timeline timestamps.
--   [ ] Implement deterministic animation evaluation at arbitrary
+-   [x] Define a reusable animatable-property model.
+-   [x] Implement keyframes with rational timeline timestamps.
+-   [x] Implement deterministic animation evaluation at arbitrary
     timestamps.
--   [ ] Implement linear interpolation and cubic Bezier easing.
--   [ ] Add scale and opacity animation first.
--   [ ] Display keyframes in the timeline.
--   [ ] Allow the playhead to scrub animation accurately.
--   [ ] Keep the animation evaluator independent of SwiftUI.
--   [ ] Add unit tests for interpolation, easing, boundary conditions,
+-   [x] Implement linear interpolation and cubic Bezier easing.
+-   [x] Add scale and opacity animation first.
+-   [x] Display keyframes in the timeline.
+-   [x] Allow the playhead to scrub animation accurately.
+-   [x] Keep the animation evaluator independent of SwiftUI.
+-   [x] Add unit tests for interpolation, easing, boundary conditions,
     and frame-time conversion.
 
 **Acceptance criteria**
 
--   A user can add a text layer over video.
--   A user can change its typography and transform.
--   A user can create scale and opacity keyframes.
--   Scrubbing the playhead produces the correct animated values.
--   Evaluating the same project state at the same timestamp produces the
+-   [x] A user can add a text layer over video.
+-   [x] A user can change its typography and transform.
+-   [x] A user can create scale and opacity keyframes.
+-   [x] Scrubbing the playhead produces the correct animated values.
+-   [x] Evaluating the same project state at the same timestamp produces the
     same result.
--   The animation model can be saved and reopened without losing
+-   [x] The animation model can be saved and reopened without losing
     keyframes.
+
+**Status:** Completed 2026-11-15. The domain gained `Typography`
+(font, size, weight, fill color, alignment, tracking — decode defaults
+so the schema can grow), `ClipSource.text` (a `TextSource` payload
+under the same explicit `kind`/`version` tag contract), `Animation`
+(one per animatable property per clip, keyframes sorted by time,
+validated for range/ordering), `Keyframe` (clip-local composition time
+at the composition timescale, interpolation defaulting to Linear), and
+`AnimatableProperty` (scale X/Y and opacity in this milestone; raw
+values are stable format identifiers). The schema is now version 2 with
+a real migration step (1→2, identity data plus a version stamp; v1
+files decode via `decodeIfPresent` defaults). Evaluation lives in
+`MotionEngine/AnimationEvaluator.swift` — pure Foundation, no SwiftUI:
+linear segments and cubic Bezier easing solved by fixed-iteration
+Newton with a fixed-count bisection fallback, so repeated evaluation of
+the same state is bit-identical; keyframes outside the animated span
+hold their first/last values. The timeline shows one diamond per
+distinct keyframe time on each clip block (highlighting under the
+playhead within a half-frame tolerance) and a Text button (⌘T) places a
+5-second text clip at the playhead on a dedicated "Text N" track that
+inserts topmost; text clips on that track preserve the no-overlap
+invariant. The inspector edits text content, typography, transform,
+base opacity, and per-property animations: keyframe add/toggle at the
+playhead captures the property's evaluated value, and each keyframe
+exposes value, easing (Linear, Ease In/Out/In-Out), and delete.
+Text layers preview as SwiftUI overlays mapped onto the aspect-fit
+composition canvas (Y-flip, negated rotation), and `AnimationEvaluator`
+feeds them scale/opacity at the playhead; asset clips seeking is
+unchanged, and seeking into a text-only region pauses and moves the
+playhead without swapping the selection. 158 tests pass, including
+evaluator interpolation/easing/boundary/frame-grid suites, animation
+and text serialization round-trips, the v1→v2 migration, and
+environment-level text/keyframe/seek behaviors.
+
+**Known limitations after Milestone 3:**
+
+-   Text rendering is a presentation-layer preview approximation: the
+    overlay places the text center at the transform position, pivots
+    scale/rotation around the anchor interpreted relative to the text's
+    own bounds, and maps onto the composition-canvas aspect rect. When
+    a loaded video's aspect differs from the composition's, the
+    letterboxed video and the overlay rect diverge. Canvas-true text
+    measurement, anchors, and compositing arrive with the Milestone 4
+    render engine; `AnimationEvaluator` itself is boundary-agnostic and
+    carries over unchanged.
+-   Animation editing is text-clip only: asset clips show read-only
+    metadata in the inspector because applying transforms to video
+    requires the compositing render engine (Milestone 4).
+-   Keyframes are added at the playhead (clamped into the clip's range);
+    keyframes cannot yet be dragged to a different time in the
+    timeline, and no per-property curve editor exists.
+-   Playhead-driven property values animate scale and opacity; position,
+    rotation, and anchor are static until the compositing milestone
+    adds them to the animatable set.
+-   Removing the last keyframe of a property removes its animation;
+    there is no "empty animation" state to edit later.
+-   Font family entry is a plain text field (`System` uses the system
+    font); a font picker and fallback-font validation arrive later.
+-   Clip trimming, moving, and multi-track management remain future
+    work (see Milestone 2 limitations); text clips append after the
+    last clip on their track like asset clips do.
 
 ## 8. Milestone 4 --- Compositing, preview quality, and export
 

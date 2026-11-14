@@ -5,11 +5,13 @@ Projects, media, preview, and export are local-first; editing must work
 fully without AI. See `roadmap.md` for the delivery plan and
 `architecture.md` for the technical architecture.
 
-**Current status:** Milestone 2 — project model, timeline foundation,
-and saving — is complete. The app builds and launches with a stable
-workspace shell, imports MOV/MP4/M4V media with playback, and saves and
-reopens `.motionproject` packages with a timeline foundation. Animation,
-effects, and AI are not implemented yet.
+**Current status:** Milestone 3 — motion graphics and animation
+foundation — is complete. The app builds and launches with a stable
+workspace shell, imports MOV/MP4/M4V media with playback, saves and
+reopens `.motionproject` packages (schema v2, with a tested v1→v2
+migration), and adds typed text layers with typography, transform, and
+keyframe animation of scale and opacity over video. Effects, export,
+and AI are not implemented yet.
 
 ## Requirements
 
@@ -102,6 +104,19 @@ the current module boundary.
   rows, and clip blocks; click or drag the ruler to scrub the preview to
   the corresponding time. Missing media files are reported clearly and
   clips are preserved.
+- **Text layers and keyframes (Milestone 3):** the timeline header Text
+  button (or File > Add Text Layer, ⌘T) places a five-second text clip
+  at the playhead on a dedicated text track. The inspector edits the
+  text content, font/size/weight/fill/alignment/tracking, transform
+  (position, scale, rotation, anchor), and base opacity, and deletes the
+  clip. Each property row (Scale X, Scale Y, Opacity) toggles keyframes
+  at the playhead — new keyframes capture the current evaluated value —
+  and lists keyframes with value, easing (Linear, Ease In/Out/In-Out),
+  and delete controls. Timeline clip blocks draw one diamond per
+  keyframe time, highlighting under the playhead; scrubbing the playhead
+  updates the animated values in the preview live. Evaluation is
+  deterministic pure Foundation code (`MotionEngine/`), independent of
+  SwiftUI, and keyframes survive save/reopen through schema v2.
 - Panels resize via the split views and collapse via the toolbar toggles;
   panel visibility persists across launches.
 - Errors are reported through a structured path: technical detail goes to

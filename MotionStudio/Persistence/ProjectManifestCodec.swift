@@ -94,8 +94,16 @@ nonisolated enum ProjectManifestCodec {
             )
         }
 
+        var migratedProject = manifest.project
+        let finalVersion = try migrate(
+            &migratedProject,
+            fromVersion: manifest.schemaVersion,
+            packageURL: packageURL
+        )
+
         var migrated = manifest
-        migrated.schemaVersion = try migrate(migrated, packageURL: packageURL)
+        migrated.schemaVersion = finalVersion
+        migrated.project = migratedProject
 
         guard migrated.project.schemaVersion == migrated.schemaVersion else {
             throw ProjectFileError.inconsistentSchemaVersion(
@@ -116,14 +124,19 @@ nonisolated enum ProjectManifestCodec {
 
     /// Ordered migration steps. The key is the version a step migrates
     /// FROM; a manifest at version N runs steps N, N+1, … until the
-    /// current version. Version 1 is the first format, so the registry
-    /// is empty for now; the first schema change adds its step here.
+    /// current version.
+    ///
+    /// - Step 1→2: the schema added typed text clip sources and
+    ///   per-clip keyframe animations, both optional on decode with
+    ///   documented defaults, so a v1 document is already a valid v2
+    ///   document. The step is the identity mapping that only stamps
+    ///   the new schema version.
     private static func migrate(
-        _ manifest: ProjectManifest,
+        _ project: inout Project,
+        fromVersion version: Int,
         packageURL: URL
     ) throws -> Int {
-        var version = manifest.schemaVersion
-        var project = manifest.project
+        var version = version
 
         while version < PackageFormat.currentSchemaVersion {
             guard let step = migrationSteps[version] else {
@@ -140,6 +153,12 @@ nonisolated enum ProjectManifestCodec {
     }
 
     private static var migrationSteps: [Int: (Project) throws -> Project] {
-        [:]
+        [
+            1: { project in
+                var project = project
+                project.schemaVersion = 2
+                return project
+            },
+        ]
     }
 }

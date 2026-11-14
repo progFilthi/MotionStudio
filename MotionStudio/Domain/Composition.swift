@@ -5,6 +5,8 @@ nonisolated enum ProjectValidationError: Error, LocalizedError {
     case invalidDimensions(width: Int, height: Int)
     case nonPositiveDuration(MediaTime)
     case overlappingClips(trackName: String, clipName: String)
+    case invalidTypography(String)
+    case invalidAnimation(String)
 
     var errorDescription: String? {
         switch self {
@@ -14,6 +16,10 @@ nonisolated enum ProjectValidationError: Error, LocalizedError {
             return "Composition duration must be positive (got \(duration.seconds)s)."
         case .overlappingClips(let trackName, let clipName):
             return "Clip '\(clipName)' on track '\(trackName)' overlaps another clip."
+        case .invalidTypography(let reason):
+            return "Invalid typography: \(reason)."
+        case .invalidAnimation(let reason):
+            return "Invalid animation: \(reason)."
         }
     }
 }
@@ -74,7 +80,8 @@ nonisolated struct Composition: Codable, Hashable, Sendable {
         return track
     }
 
-    /// Validates dimensions, duration, and clip overlap invariants.
+    /// Validates dimensions, duration, clip overlap invariants, and
+    /// clip-level content (typography, animations).
     func validate() throws {
         guard width > 0, height > 0 else {
             throw ProjectValidationError.invalidDimensions(width: width, height: height)
@@ -91,6 +98,9 @@ nonisolated struct Composition: Codable, Hashable, Sendable {
                         clipName: clip.name
                     )
                 }
+            }
+            for clip in track.clips {
+                try clip.validate()
             }
         }
     }

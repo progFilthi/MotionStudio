@@ -23,7 +23,11 @@ nonisolated enum PackageFormat {
 
     /// Current project schema version. Bump when the schema changes and
     /// add an explicit, tested migration step (architecture §6.3).
-    static let currentSchemaVersion = 1
+    ///
+    /// Version 2 (Milestone 3) added typed text clip sources
+    /// (`ClipSource.text`) and per-clip keyframe animations
+    /// (`Clip.animations`).
+    static let currentSchemaVersion = 2
 
     /// The uniform type registered for project packages. The identifier
     /// is declared in the application's Info.plist as an exported type.

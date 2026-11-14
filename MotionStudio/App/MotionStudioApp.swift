@@ -20,6 +20,12 @@ struct MotionStudioApp: App {
                 }
                 .keyboardShortcut("i", modifiers: .command)
                 .disabled(environment == nil)
+
+                Button("Add Text Layer") {
+                    environment?.addTextClip()
+                }
+                .keyboardShortcut("t", modifiers: .command)
+                .disabled(environment == nil)
             }
         }
     }

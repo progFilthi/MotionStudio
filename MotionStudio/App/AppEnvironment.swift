@@ -19,6 +19,16 @@ struct MissingMediaError: LocalizedError {
     }
 }
 
+/// A text clip active at the playhead with its evaluated animation
+/// values — the presentation input for preview overlays. Session-layer
+/// type: never persisted.
+nonisolated struct TextOverlay: Identifiable, Hashable, Sendable {
+    let clip: Clip
+    let values: ResolvedClipValues
+
+    var id: UUID { clip.id }
+}
+
 /// The application composition root for one document window.
 ///
 /// Shared services are constructed here and injected into the
@@ -249,9 +259,18 @@ final class AppEnvironment {
 
     /// Selects a timeline clip, loading its asset and placing the
     /// playhead at the clip's start.
+    ///
+    /// Text layers have no media to load: selecting one pauses playback
+    /// (a stable editing state), keeps the already-loaded video, and
+    /// moves the playhead to the clip's start.
     func selectClip(_ clip: Clip, in project: Project) {
-        guard case .asset(let source) = clip.source,
-              let asset = project.asset(withID: source.assetID) else {
+        guard case .asset(let source) = clip.source else {
+            playback.pause()
+            selectedClipID = clip.id
+            playheadTime = clip.timelineStart
+            return
+        }
+        guard let asset = project.asset(withID: source.assetID) else {
             return
         }
 
@@ -287,32 +306,33 @@ final class AppEnvironment {
     // MARK: Timeline seeking
 
     /// Moves the composition playhead, seeking the preview to the mapped
-    /// source time when the position falls inside a clip.
+    /// source time when the position falls inside a playable clip.
     ///
-    /// Clicking in an empty region pauses playback and moves the
-    /// playhead only — an honest state with no content to show.
+    /// While the selected clip contains the position, selection stays
+    /// stable while scrubbing — text layers included, so a selected text
+    /// clip is not swapped out mid-edit. Seeking into a text-only region
+    /// pauses playback and moves the playhead only: an honest state with
+    /// no media to drive. Regions where a text layer overlaps video
+    /// still drive the video underneath.
     func seekToCompositionTime(_ time: MediaTime, in project: Project) {
-        var targetClip: Clip?
-
         if let (_, selected) = project.clip(withID: selectedClipID) {
             let range = selected.timelineRange
             if time >= range.start, time < range.end {
-                targetClip = selected
+                if selected.isPlayable {
+                    playheadTime = time
+                    let source = TimelineMapper.sourceTime(forCompositionTime: time, in: selected)
+                    playback.seek(to: source.cmTime)
+                } else {
+                    playback.pause()
+                    playheadTime = time
+                }
+                return
             }
-        }
-        if targetClip == nil, let found = TimelineMapper.clip(at: time, in: project.composition) {
-            targetClip = found.clip
         }
 
-        if let clip = targetClip {
-            if clip.id == selectedClipID {
-                playheadTime = time
-                let source = TimelineMapper.sourceTime(forCompositionTime: time, in: clip)
-                playback.seek(to: source.cmTime)
-            } else {
-                selectClip(clip, in: project)
-                playheadTime = time
-            }
+        if let found = TimelineMapper.clip(at: time, in: project.composition), found.clip.isPlayable {
+            selectClip(found.clip, in: project)
+            playheadTime = time
         } else {
             playback.pause()
             playheadTime = time
@@ -322,12 +342,211 @@ final class AppEnvironment {
     // MARK: Playhead sync
 
     /// Maps playback time into composition time while a clip is loaded.
+    ///
+    /// Only playable (asset) clips are synced: text selection pauses
+    /// playback and never drives the playhead from a media clock.
     private func syncPlayhead(with time: CMTime) {
         guard let project,
-              let (_, clip) = project.clip(withID: selectedClipID) else {
+              let (_, clip) = project.clip(withID: selectedClipID),
+              clip.isPlayable else {
             return
         }
         let source = MediaTime(cmTime: time)
         playheadTime = TimelineMapper.compositionTime(forSourceTime: source, in: clip)
+    }
+
+    // MARK: Text layers
+
+    /// Adds a typed text clip at the playhead and selects it. The clip
+    /// lives on the dedicated text track; the composition duration
+    /// grows when the clip extends past it.
+    func addTextClip() {
+        guard let project else { return }
+        var updated = project
+        let clip = updated.addTextClip(at: playheadTime)
+        projectBinding?.wrappedValue = updated
+        selectClip(clip, in: updated)
+    }
+
+    /// Removes the selected clip from the timeline. Tracks are
+    /// structural and stay; the already-loaded video is not unloaded.
+    func deleteSelectedClip() {
+        guard let project, let id = selectedClipID else { return }
+        var updated = project
+        guard updated.removeClip(withID: id) != nil else { return }
+        selectedClipID = nil
+        projectBinding?.wrappedValue = updated
+    }
+
+    /// Applies an edit to the selected text clip, validating the result.
+    ///
+    /// The edit runs on a copy of the project and only publishes when
+    /// the edited clip validates, so invalid edits never apply
+    /// partially.
+    func updateSelectedTextClip(_ perform: (inout Clip) -> Void) {
+        guard let project, let id = selectedClipID else { return }
+        var updated = project
+        guard let clip = updated.updateClip(withID: id, perform: perform), clip.isText else { return }
+        do {
+            try clip.validate()
+        } catch {
+            report(error, while: "editing the text clip")
+            return
+        }
+        projectBinding?.wrappedValue = updated
+    }
+
+    // MARK: Animation editing
+
+    /// Toggles a keyframe for a property on the selected clip at the
+    /// playhead.
+    ///
+    /// A new keyframe captures the property's current evaluated value at
+    /// the playhead, so adding keys never causes the value to jump. When
+    /// the playhead is outside the clip's range, the keyframe clamps to
+    /// the nearest end of the clip so the action always has a visible
+    /// effect. Removing the last keyframe removes the animation with it.
+    func toggleKeyframe(for property: AnimatableProperty) {
+        guard let project, let id = selectedClipID, let (_, clip) = project.clip(withID: id) else { return }
+        let localTime = (playheadTime - clip.timelineStart).clamped(to: .zero...clip.timelineDuration)
+        let tolerance = project.composition.frameRate.halfFrameDuration
+
+        var updated = project
+        var failure: Error?
+        updated.updateClip(withID: id) { target in
+            let value = currentValue(of: property, in: clip)
+            if let existing = clip.animation(for: property)?.keyframe(near: localTime, tolerance: tolerance) {
+                target.updateAnimation(for: property) { $0.removeKeyframe(at: existing.time) }
+                dropAnimationIfEmpty(&target, property: property)
+                return
+            }
+            if clip.animation(for: property) != nil {
+                target.updateAnimation(for: property) { animation in
+                    do {
+                        try animation.insert(Keyframe(time: localTime, value: value))
+                    } catch {
+                        failure = error
+                    }
+                }
+                return
+            }
+            target.animations.append(Animation(
+                property: property,
+                keyframes: [Keyframe(time: localTime, value: value)]
+            ))
+        }
+        if let failure {
+            report(failure, while: "editing keyframes")
+            return
+        }
+        projectBinding?.wrappedValue = updated
+    }
+
+    /// Removes the keyframe for a property at a clip-local composition
+    /// time, when one exists. Removing the last keyframe removes the
+    /// animation with it.
+    func removeKeyframe(for property: AnimatableProperty, at localTime: MediaTime) {
+        updateSelectedTextClip { clip in
+            clip.updateAnimation(for: property) { $0.removeKeyframe(at: localTime) }
+            dropAnimationIfEmpty(&clip, property: property)
+        }
+    }
+
+    /// Updates the value and/or interpolation of the keyframe for a
+    /// property at a clip-local composition time. The edit validates
+    /// like every other text-clip edit.
+    func updateKeyframe(
+        for property: AnimatableProperty,
+        at localTime: MediaTime,
+        value: Double? = nil,
+        interpolation: Interpolation? = nil
+    ) {
+        updateSelectedTextClip { clip in
+            clip.updateAnimation(for: property) { animation in
+                guard let index = animation.keyframes.firstIndex(where: { $0.time == localTime }) else {
+                    return
+                }
+                if let value {
+                    animation.keyframes[index].value = value
+                }
+                if let interpolation {
+                    animation.keyframes[index].interpolation = interpolation
+                }
+            }
+        }
+    }
+
+    /// Adds an animation for a property, seeded with a single keyframe
+    /// at the playhead holding the property's current value. Does
+    /// nothing when the property is already animated.
+    func addAnimation(for property: AnimatableProperty) {
+        guard let project, let id = selectedClipID, let (_, clip) = project.clip(withID: id),
+              clip.animation(for: property) == nil else {
+            return
+        }
+        let localTime = (playheadTime - clip.timelineStart).clamped(to: .zero...clip.timelineDuration)
+        let value = currentValue(of: property, in: clip)
+        updateSelectedTextClip { target in
+            target.animations.append(Animation(
+                property: property,
+                keyframes: [Keyframe(time: localTime, value: value)]
+            ))
+        }
+    }
+
+    /// Removes the whole animation for a property.
+    func removeAnimation(for property: AnimatableProperty) {
+        updateSelectedTextClip { clip in
+            clip.animations.removeAll { $0.property == property }
+        }
+    }
+
+    /// Adds the animation for a property when absent, removes it when
+    /// present.
+    func toggleAnimation(for property: AnimatableProperty) {
+        guard let project, let id = selectedClipID, let (_, clip) = project.clip(withID: id) else { return }
+        if clip.animation(for: property) != nil {
+            removeAnimation(for: property)
+        } else {
+            addAnimation(for: property)
+        }
+    }
+
+    /// The property's value at the playhead: the evaluated animation
+    /// value when animated, the static clip value otherwise.
+    private func currentValue(of property: AnimatableProperty, in clip: Clip) -> Double {
+        let localTime = playheadTime - clip.timelineStart
+        if let animation = clip.animation(for: property),
+           let value = AnimationEvaluator.value(of: animation, atClipLocalTime: localTime) {
+            return value
+        }
+        return property.staticValue(of: clip)
+    }
+
+    /// An animation without keyframes carries no information; remove it
+    /// so the clip never keeps a phantom animation entry.
+    private func dropAnimationIfEmpty(_ clip: inout Clip, property: AnimatableProperty) {
+        if clip.animation(for: property)?.keyframes.isEmpty == true {
+            clip.animations.removeAll { $0.property == property }
+        }
+    }
+
+    // MARK: Preview overlays
+
+    /// The text overlays active at the playhead, with their evaluated
+    /// scale and opacity. Ordering follows track order (topmost first).
+    func activeTextOverlays(in project: Project) -> [TextOverlay] {
+        var overlays: [TextOverlay] = []
+        for track in project.composition.tracks {
+            for clip in track.clips where clip.isText {
+                let range = clip.timelineRange
+                guard playheadTime >= range.start, playheadTime < range.end else { continue }
+                overlays.append(TextOverlay(
+                    clip: clip,
+                    values: AnimationEvaluator.resolvedValues(for: clip, atCompositionTime: playheadTime)
+                ))
+            }
+        }
+        return overlays
     }
 }

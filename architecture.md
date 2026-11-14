@@ -5,8 +5,8 @@
 > **Product:** Native macOS motion-graphics editor with a future
 > AI-native editing layer.
 >
-> **Current implementation phase:** Milestone 2 --- project model,
-> timeline foundation, and saving.
+> **Current implementation phase:** Milestone 3 --- motion graphics
+> and animation foundation.
 >
 > **Important:** This document describes the intended architecture. It
 > does not mean all described systems should be implemented immediately.

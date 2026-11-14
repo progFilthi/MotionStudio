@@ -32,7 +32,7 @@ struct WorkspaceView: View {
                 }
 
                 VSplitView {
-                    PreviewCanvasView()
+                    PreviewCanvasView(project: project)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     if layout.isTimelineVisible {
@@ -42,7 +42,7 @@ struct WorkspaceView: View {
                 .frame(minWidth: 560)
 
                 if layout.isInspectorVisible {
-                    InspectorPanelView()
+                    InspectorPanelView(project: project)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
