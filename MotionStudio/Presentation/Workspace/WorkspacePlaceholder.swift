@@ -1,8 +1,18 @@
 import SwiftUI
 
-/// Standard header strip for workspace panels.
-struct WorkspacePanelHeader: View {
+/// Standard header strip for workspace panels, with an optional trailing
+/// slot for panel-level actions such as importing media.
+struct WorkspacePanelHeader<Trailing: View>: View {
     let title: String
+    let trailing: Trailing
+
+    init(
+        title: String,
+        @ViewBuilder trailing: () -> Trailing = { EmptyView() }
+    ) {
+        self.title = title
+        self.trailing = trailing()
+    }
 
     var body: some View {
         HStack {
@@ -11,7 +21,8 @@ struct WorkspacePanelHeader: View {
                 .tracking(0.6)
                 .textCase(.uppercase)
                 .foregroundStyle(WorkspaceTheme.textSecondary)
-            Spacer(minLength: 0)
+            Spacer(minLength: 8)
+            trailing
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 9)

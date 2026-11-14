@@ -59,6 +59,7 @@ The app lands in `.build/Build/Products/Debug/MotionStudio.app`.
 MotionStudio.xcodeproj/
 MotionStudio/                     App target sources
 ├── App/                          Entry point, composition root, diagnostics
+├── MediaEngine/                  Import, metadata, playback (AVFoundation only)
 ├── Presentation/                 Workspace, toolbar, panels
 └── Resources/                    Asset catalog
 Tests/MotionStudioTests/          Unit tests (hosted in the app)
@@ -81,6 +82,11 @@ a single app target plus a test target by design.
 - Left media browser, center preview canvas, bottom timeline, and right
   inspector regions, all with honest empty states and sensible minimum
   sizes.
+- **Media import and playback (Milestone 1):** import MOV/MP4/M4V videos
+  via File > Import Media… (⌘I) or the sidebar + button; inspected
+  duration, dimensions, and track counts appear in the media list;
+  selecting media loads it into the preview through AVPlayer, with
+  working transport, scrubber, and time readout in the toolbar.
 - Panels resize via the split views and collapse via the toolbar toggles;
   panel visibility persists across launches.
 - Errors are reported through a structured path: technical detail goes to
@@ -89,9 +95,21 @@ a single app target plus a test target by design.
 ## Diagnostics
 
 Logs use the unified logging system with subsystem
-`com.motionstudio.MotionStudio` and categories `app` and `workspace`.
-Filter in Console.app by that subsystem. Do not log secrets, API keys,
-or private media contents.
+`com.motionstudio.MotionStudio` and categories `app`, `workspace`, and
+`media`. Filter in Console.app by that subsystem. Do not log secrets,
+API keys, or private media contents.
+
+## Supported media formats
+
+Import accepts MOV, MP4, and M4V containers (`MotionStudio/MediaEngine/
+MediaFormats.swift` is the single source of truth); codecs are whatever
+AVFoundation plays reliably on the target Mac, typically H.264 and
+HEVC. The set is deliberately small and grows only with testing.
+
+The app is currently **not sandboxed** (local development build with
+hardened runtime), so user-selected files open directly and
+security-scoped bookmarks are unnecessary. Sandboxing and bookmark
+handling must be added before any public distribution.
 
 ## Documentation
 

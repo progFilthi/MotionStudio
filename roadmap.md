@@ -211,28 +211,57 @@ as the design system grows.
 
 **Scope**
 
--   [ ] Add a native file-import flow using macOS file selection APIs.
--   [ ] Support a small, explicitly documented initial set of common
+-   [x] Add a native file-import flow using macOS file selection APIs.
+-   [x] Support a small, explicitly documented initial set of common
     video formats, starting with formats supported by AVFoundation on
     the target Mac.
--   [ ] Use AVURLAsset/AVFoundation APIs to inspect media metadata.
--   [ ] Display duration, dimensions, and available video/audio tracks.
--   [ ] Integrate AVPlayer for playback.
--   [ ] Add play, pause, and seek controls.
--   [ ] Add a time display and playback progress indicator.
--   [ ] Handle missing files, unsupported media, permission failures,
+-   [x] Use AVURLAsset/AVFoundation APIs to inspect media metadata.
+-   [x] Display duration, dimensions, and available video/audio tracks.
+-   [x] Integrate AVPlayer for playback.
+-   [x] Add play, pause, and seek controls.
+-   [x] Add a time display and playback progress indicator.
+-   [x] Handle missing files, unsupported media, permission failures,
     and decode errors.
--   [ ] Keep media work off the main thread where appropriate.
--   [ ] Preserve access to user-selected files using appropriate
+-   [x] Keep media work off the main thread where appropriate.
+-   [x] Preserve access to user-selected files using appropriate
     security-scoped access handling when needed.
 
 **Acceptance criteria**
 
--   A user can import a supported local video.
--   The video appears in the preview and plays.
--   Play, pause, and seeking work.
--   The UI remains responsive during playback and metadata loading.
--   Errors are understandable and do not crash the application.
+-   [x] A user can import a supported local video.
+-   [x] The video appears in the preview and plays.
+-   [x] Play, pause, and seeking work.
+-   [x] The UI remains responsive during playback and metadata loading.
+-   [x] Errors are understandable and do not crash the application.
+
+**Status:** Completed 2026-11-14. Import via File > Import Media…
+(⌘I) or the media sidebar + button through a filtered open panel;
+inspected metadata appears in the sidebar and drives the preview
+through AVPlayer with a custom `AVPlayerLayer` surface. Transport,
+scrubber, and time readout live in the toolbar. Supported formats are
+MOV, MP4, and M4V (`MediaFormats` is the single source of truth).
+Media inspection runs off the main thread via async AVFoundation
+loads; playback state is narrow and UI-scoped (architecture §10.2).
+Errors surface through the Milestone 0 reporting path as alerts and
+unified-log diagnostics. Security-scoped access is not needed yet: the
+app is not sandboxed during local development; revisit before
+distribution.
+
+**Known limitations after Milestone 1:**
+
+-   The media library and playback selection are session state; nothing
+    persists yet (project model and saving arrive in Milestone 2).
+-   No drag-and-drop import; no thumbnails (deferred to Milestone 8 by
+    the roadmap).
+-   When importing several files with multiple failures, each failure is
+    logged but only the most recent alert is visible.
+-   Scrubbing seeks coarsely mid-drag and locks to the exact frame on
+    release.
+-   An audio-only video container previews as a blank canvas with live
+    audio and working transport.
+-   No file-move detection during a session; a moved or deleted file
+    surfaces as a playback failure alert with technical detail in the
+    log.
 
 ## 6. Milestone 2 --- Project model, timeline foundation, and saving
 

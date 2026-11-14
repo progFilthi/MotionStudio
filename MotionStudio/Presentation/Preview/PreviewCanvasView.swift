@@ -1,23 +1,47 @@
 import SwiftUI
 
-/// Center canvas: video preview and, later, selection overlays.
-///
-/// Playback is a Milestone 1 capability and is intentionally absent.
+/// Center canvas: video preview surface or an honest empty state.
 struct PreviewCanvasView: View {
+    @Environment(AppEnvironment.self) private var environment
+
     var body: some View {
         ZStack {
             WorkspaceTheme.canvasBackground
-            WorkspacePlaceholder(
-                systemImage: "photo",
-                title: "Preview",
-                message: "The composition preview will appear here. Preview playback is not available yet."
-            )
+            if environment.playback.isReadyToPlay {
+                AVPlayerSurface(player: environment.playback.player)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                placeholder
+            }
         }
         .frame(minWidth: 480, minHeight: 260)
         .overlay(alignment: .top) {
             Rectangle()
                 .fill(WorkspaceTheme.hairline)
                 .frame(height: 1)
+        }
+    }
+
+    @ViewBuilder
+    private var placeholder: some View {
+        if environment.playback.hasPlaybackFailure {
+            WorkspacePlaceholder(
+                systemImage: "exclamationmark.triangle",
+                title: "Playback Failed",
+                message: "The media could not be played. The file may be missing, damaged, or in an unsupported codec."
+            )
+        } else if environment.playback.hasItem {
+            WorkspacePlaceholder(
+                systemImage: "photo",
+                title: "Loading Preview",
+                message: "Preparing the media for playback."
+            )
+        } else {
+            WorkspacePlaceholder(
+                systemImage: "photo",
+                title: "Preview",
+                message: "Import a video from the media browser to preview it here."
+            )
         }
     }
 }

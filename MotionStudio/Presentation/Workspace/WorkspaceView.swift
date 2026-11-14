@@ -48,5 +48,10 @@ struct WorkspaceView: View {
         } message: { presentation in
             Text(presentation.message)
         }
+        .onChange(of: environment.mediaLibrary.selectedItemID) { _, newID in
+            guard let newID,
+                  let item = environment.mediaLibrary.item(withID: newID) else { return }
+            environment.selectMedia(item)
+        }
     }
 }

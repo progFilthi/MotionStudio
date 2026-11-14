@@ -2,12 +2,13 @@ import SwiftUI
 
 /// Top toolbar of the editing workspace.
 ///
-/// Transport and undo/redo controls are shown disabled until the features
-/// they represent exist; they must never appear enabled while they do
-/// nothing (Milestone 0 acceptance criteria). Panel toggles are fully
-/// functional.
+/// Transport, scrubber, and time readout are live for imported media.
+/// Undo/redo stay disabled until the command system exists (Milestone 5);
+/// they must never appear enabled while they do nothing. Panel toggles are
+/// fully functional.
 struct WorkspaceToolbar: View {
     let layout: WorkspaceLayoutState
+    @Environment(AppEnvironment.self) private var environment
 
     var body: some View {
         HStack(spacing: 16) {
@@ -20,10 +21,7 @@ struct WorkspaceToolbar: View {
 
             Spacer(minLength: 12)
 
-            transportControls
-                .disabled(true)
-                .foregroundStyle(WorkspaceTheme.textTertiary)
-                .help("Playback becomes available when media support is added")
+            PlaybackControlsView(playback: environment.playback)
 
             Spacer(minLength: 12)
 
@@ -44,37 +42,6 @@ struct WorkspaceToolbar: View {
                 .fill(WorkspaceTheme.hairline)
                 .frame(height: 1)
         }
-    }
-
-    // MARK: Transport (disabled until Milestone 1)
-
-    private var transportControls: some View {
-        HStack(spacing: 18) {
-            Button {
-                // Intentionally unimplemented: media playback arrives in a
-                // later milestone. The button stays disabled.
-            } label: {
-                Image(systemName: "backward.end.fill")
-            }
-            .accessibilityLabel("Go to start")
-
-            Button {
-                // Intentionally unimplemented: media playback arrives in a
-                // later milestone. The button stays disabled.
-            } label: {
-                Image(systemName: "play.fill")
-            }
-            .accessibilityLabel("Play")
-
-            Button {
-                // Intentionally unimplemented: media playback arrives in a
-                // later milestone. The button stays disabled.
-            } label: {
-                Image(systemName: "forward.end.fill")
-            }
-            .accessibilityLabel("Go to end")
-        }
-        .buttonStyle(.plain)
     }
 
     // MARK: Undo / redo (disabled until Milestone 5)

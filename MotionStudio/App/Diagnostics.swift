@@ -6,7 +6,7 @@ import os
 /// All subsystem loggers share one subsystem so Console.app filtering stays
 /// simple. Add one category per architecture subsystem as it appears; do not
 /// log secrets, private media contents, or user data.
-enum AppLog {
+nonisolated enum AppLog {
     private static let subsystem = Bundle.main.bundleIdentifier ?? "com.motionstudio.MotionStudio"
 
     /// Application lifecycle and composition-root events.
@@ -14,6 +14,9 @@ enum AppLog {
 
     /// Workspace presentation events.
     static let workspace = Logger(subsystem: subsystem, category: "workspace")
+
+    /// Media import and playback events.
+    static let media = Logger(subsystem: subsystem, category: "media")
 }
 
 /// A user-facing description of a failure, kept separate from technical
