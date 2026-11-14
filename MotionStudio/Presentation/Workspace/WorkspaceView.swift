@@ -15,7 +15,11 @@ import SwiftUI
 /// part of project data.
 struct WorkspaceView: View {
     @Binding var project: Project
-    @Environment(AppEnvironment.self) private var environment
+    /// The window's environment: created here and provided to the
+    /// workspace content below. Child views read it through
+    /// `@Environment(AppEnvironment.self)`; scene commands resolve it
+    /// through `focusedSceneValue`.
+    @State private var environment = AppEnvironment()
 
     @State private var layout = WorkspaceLayoutState()
     @State private var keyMonitor: Any?
@@ -58,6 +62,7 @@ struct WorkspaceView: View {
         } message: { presentation in
             Text(presentation.message)
         }
+        .environment(environment)
         .focusedSceneValue(\.appEnvironment, environment)
         .onAppear {
             environment.attach(project: $project)
