@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Xcode
+DerivedData/
+xcuserdata/
+*.xcuserstate
+
+# Local build artifacts
+.build/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+
+# Agent scratch space
+.opencode/
