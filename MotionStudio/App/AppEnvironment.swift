@@ -182,6 +182,7 @@ final class AppEnvironment {
         guard panel.runModal() == .OK, !panel.urls.isEmpty else { return }
 
         var firstAsset: MediaAsset?
+        var placedClip: Clip?
         for url in panel.urls {
             do {
                 let info = try await mediaImporter.inspect(url: url)
@@ -197,6 +198,19 @@ final class AppEnvironment {
                 }
 
                 mutate { $0.addAsset(asset) }
+
+                // An empty timeline adopts the first imported asset, so
+                // a fresh project immediately spans the imported media
+                // instead of its default ten seconds. Later imports stay
+                // in the library until they are placed explicitly.
+                if placedClip == nil,
+                   let current = project,
+                   current.composition.tracks.allSatisfy({ $0.clips.isEmpty }) {
+                    var updated = current
+                    placedClip = updated.addTimelineClip(for: asset)
+                    projectBinding?.wrappedValue = updated
+                }
+
                 if firstAsset == nil {
                     firstAsset = asset
                 }
@@ -205,7 +219,9 @@ final class AppEnvironment {
             }
         }
 
-        if let asset = firstAsset {
+        if let clip = placedClip, let project {
+            selectClip(clip, in: project)
+        } else if let asset = firstAsset {
             select(asset: asset)
         }
     }
@@ -333,6 +349,12 @@ final class AppEnvironment {
         if let found = TimelineMapper.clip(at: time, in: project.composition), found.clip.isPlayable {
             selectClip(found.clip, in: project)
             playheadTime = time
+            // `selectClip` positions playback at the clip's start; this
+            // seek moves it to the clicked position, so the preview is
+            // paused exactly where the playhead stands and pressing
+            // play resumes from the playhead.
+            let source = TimelineMapper.sourceTime(forCompositionTime: time, in: found.clip)
+            playback.seek(to: source.cmTime)
         } else {
             playback.pause()
             playheadTime = time

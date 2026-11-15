@@ -3,10 +3,10 @@ import SwiftUI
 /// The bottom timeline panel: ruler, playhead, track rows, and clip
 /// blocks (roadmap Milestone 2).
 ///
-/// The playhead reflects composition time; dragging or clicking the
-/// ruler seeks the preview to the mapped source time. Track order
-/// follows the domain convention: index 0 is the topmost row. Zoom is
-/// session state and is not persisted.
+/// The playhead reflects composition time; dragging the ruler scrubs
+/// and clicking anywhere on the timeline moves the playhead to the
+/// clicked time. Track order follows the domain convention: index 0 is
+/// the topmost row. Zoom is session state and is not persisted.
 struct TimelinePanelView: View {
     @Binding var project: Project
     @Environment(AppEnvironment.self) private var environment
@@ -73,6 +73,7 @@ struct TimelinePanelView: View {
                     width: max(contentWidth, geometry.size.width),
                     alignment: .leading
                 )
+                .coordinateSpace(name: "timelineContent")
                 .overlay(alignment: .leading) {
                     playhead
                 }
@@ -83,24 +84,50 @@ struct TimelinePanelView: View {
 
     // MARK: Ruler
 
-    /// Labeled tick interval chosen so labels stay ~90 pt apart.
-    private var tickInterval: Double {
-        let candidates: [Double] = [0.1, 0.25, 0.5, 1, 2, 5, 10, 15, 30, 60]
-        return candidates.first { $0 * pixelsPerSecond >= 90 } ?? 60
-    }
-
     private var ruler: some View {
         Canvas { context, size in
-            let interval = tickInterval
-            var tick = 0.0
-            while tick <= visibleLength {
+            let interval = TimelineRulerMetrics.labeledInterval(pixelsPerSecond: pixelsPerSecond)
+            let minor = TimelineRulerMetrics.minorInterval(
+                labeled: interval,
+                pixelsPerSecond: pixelsPerSecond
+            )
+
+            // Unlabeled minor ticks between the labeled ones; every
+            // fifth minor coincides with a labeled tick and is skipped.
+            if let minor {
+                let minorCount = Int((visibleLength / minor).rounded(.up))
+                for index in 0...max(minorCount, 0) where index % 5 != 0 {
+                    let x = Double(index) * minor * pixelsPerSecond
+                    if x <= size.width {
+                        context.stroke(
+                            Path(CGRect(
+                                x: x,
+                                y: size.height * 0.75,
+                                width: 1,
+                                height: size.height * 0.25
+                            )),
+                            with: .color(WorkspaceTheme.hairline.opacity(0.6)),
+                            lineWidth: 1
+                        )
+                    }
+                }
+            }
+
+            // Labeled ticks. Index-based so tick positions never drift
+            // through repeated floating-point addition on long videos.
+            let tickCount = Int((visibleLength / interval).rounded(.up))
+            for index in 0...max(tickCount, 0) {
+                let tick = Double(index) * interval
                 let x = tick * pixelsPerSecond
                 if x <= size.width {
-                    let label = PlaybackTimeFormatting.shortFormat(seconds: tick)
+                    let labelColor = TimelineRulerMetrics.isMinuteMark(
+                        seconds: tick,
+                        interval: interval
+                    ) ? WorkspaceTheme.textSecondary : WorkspaceTheme.textTertiary
                     context.draw(
-                        Text(label)
+                        Text(TimelineRulerMetrics.label(seconds: tick, interval: interval))
                             .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundStyle(WorkspaceTheme.textTertiary),
+                            .foregroundStyle(labelColor),
                         at: CGPoint(x: x + 3, y: size.height * 0.32),
                         anchor: .leading
                     )
@@ -110,7 +137,6 @@ struct TimelinePanelView: View {
                         lineWidth: 1
                     )
                 }
-                tick += interval
             }
         }
         .frame(height: rulerHeight)
@@ -140,6 +166,22 @@ struct TimelinePanelView: View {
                 .fill(WorkspaceTheme.hairline)
                 .frame(height: 1)
         }
+        .contentShape(Rectangle())
+        .onTapGesture(coordinateSpace: .named("timelineContent")) { location in
+            seekToContent(x: location.x)
+        }
+        .help("Click to move the playhead; click a clip to select it")
+    }
+
+    /// Moves the playhead to the composition time under the given
+    /// content-space x position. `seekToCompositionTime` selects a
+    /// playable clip under the position as part of the seek.
+    private func seekToContent(x: CGFloat) {
+        let seconds = max(0, x / pixelsPerSecond)
+        environment.seekToCompositionTime(
+            .fromSeconds(seconds, timescale: Composition.timescale),
+            in: project
+        )
     }
 
     private func trackLane(_ track: Track) -> some View {
@@ -156,10 +198,6 @@ struct TimelinePanelView: View {
                 )
                 .frame(width: max(clip.timelineDuration.seconds * pixelsPerSecond, 24))
                 .offset(x: clip.timelineStart.seconds * pixelsPerSecond)
-                .onTapGesture {
-                    guard !track.isLocked else { return }
-                    environment.selectClip(clip, in: project)
-                }
             }
             if track.isLocked {
                 Image(systemName: "lock.fill")
